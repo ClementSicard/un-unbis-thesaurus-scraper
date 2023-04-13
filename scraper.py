@@ -18,7 +18,7 @@ class UNBISThesaurusScraper:
         self.topics = {"topics": []}
         self.BASE_URL = "https://metadata.un.org/thesaurus/alphabetical?lang=en"
 
-        self.html = self._get_html(self.BASE_URL)
+        self.html = self.get_html(self.BASE_URL)
         self.parser = BeautifulSoup(self.html, "html.parser")
 
         self.raw_topics = self.get_raw_topics()
@@ -40,8 +40,8 @@ class UNBISThesaurusScraper:
     def add_topic(self, topic):
         self.topics["topics"].append(topic)
 
-    def _get_html(
-        self,
+    @staticmethod
+    def get_html(
         url: str,
         headers: Optional[Dict[str, Any]] = None,
         to_json: bool = False,
@@ -58,6 +58,7 @@ class UNBISThesaurusScraper:
         return self.parser.select(selector)[0].find_all(class_="bc-link")
 
     def get_topic(self, json_page: Dict[str, Any]) -> Topic:
+        logger.debug(f"Keys in JSON page: {json_page.keys()}")
         related_topics = (
             [
                 related["@id"].split("/")[-1]
@@ -79,11 +80,10 @@ class UNBISThesaurusScraper:
         url = json_page["@id"]
 
         # logger.debug(labels["en"])
-
         return Topic(labels=labels, url=url, related=related_topics)
 
     def _get_topics(self):
-        topics_htmls = get_urls([topic["href"] for topic in self.raw_topics])
+        topics_htmls = get_urls([topic["href"] for topic in self.raw_topics[:10]])
 
         for topic_html in topics_htmls:
             topic = self.get_topic(topic_html)
@@ -149,3 +149,6 @@ class UNBISThesaurusScraper:
         )
         fig.export_html("topics.html", overwrite=True)
         fig.display()
+
+    def to_sigma(self, file_name: str = "sigma_data.json") -> None:
+        pass
