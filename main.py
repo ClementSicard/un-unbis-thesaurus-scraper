@@ -1,11 +1,33 @@
-from scraper import UNBISThesaurusScraper
+from argparse import ArgumentParser
+from typing import Any, Dict
+
+from src.scraper import UNBISThesaurusScraper
 
 
-def main() -> None:
-    scraper = UNBISThesaurusScraper()
+def main(args: Dict[str, Any]) -> None:
+    scraper = UNBISThesaurusScraper(verbose=args["verbose"])
     scraper.crawl()
-    scraper.visualize_network()
+    scraper.export_to_json(args["output"])
+
+
+def parse_args() -> Dict[str, Any]:
+    parser = ArgumentParser()
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Whether to print verbose logs",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        help="Output file path",
+        default="downloads/output.json",
+    )
+    return vars(parser.parse_args())
 
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    main(args=args)
