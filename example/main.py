@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 from typing import Any, Dict
 
-from src.scraper import UNBISThesaurusScraper
+from thesaurus.scraper import UNBISThesaurusScraper
 
 
 def main(args: Dict[str, Any]) -> None:
