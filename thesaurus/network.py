@@ -1,8 +1,9 @@
 import random
 from typing import Optional
 
-import src.consts as consts
 from loguru import logger
+
+import thesaurus.consts as consts
 
 
 class Network:
@@ -79,7 +80,6 @@ class Network:
 
     def add_edge(
         self,
-        edge_id: str,
         source: str,
         target: str,
         size: float = 1.0,
@@ -87,8 +87,11 @@ class Network:
         edge_type: str = "topic->subtopic",
     ) -> None:
         assert edge_type in consts.EDGE_TYPES, f"Invalid edge type {edge_type}"
+        edge_id = f"{source}-{target}"
+        alt_edge_id = f"{target}-{source}"
 
-        if edge_id not in self.edge_ids:
+        # To avoid duplicate edges
+        if edge_id not in self.edge_ids and alt_edge_id not in self.edge_ids:
             # Save edge id to set of edge ids
             self.edge_ids.add(edge_id)
 
@@ -105,5 +108,3 @@ class Network:
             }
 
             self.json["edges"].append(edge_json)
-        else:
-            logger.warning(f"Edge {edge_id} already exists")

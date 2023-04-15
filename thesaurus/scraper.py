@@ -51,16 +51,27 @@ class UNBISThesaurusScraper:
             logger.debug(f"Number of nodes: {len(self.network.node_ids)}")
             logger.debug(f"Number of edges: {len(self.network.edge_ids)}")
 
-        self.crawl_subtopics(ids=self.subtopic_ids)
-        if self.verbose:
-            logger.debug(f"Number of nodes: {len(self.network.node_ids)}")
-            logger.debug(f"Number of edges: {len(self.network.edge_ids)}")
+        logger.info("Recusrively crawling subsubtopics...")
+        i = 1
+        unexplored = self.subtopic_ids
+        while True:
+            unexplored = self.crawl_subtopics(ids=unexplored)
+            self.subtopic_ids.update(unexplored)
+            if self.verbose:
+                logger.debug(f"Number of nodes: {len(self.network.node_ids)}")
+                logger.debug(f"Number of edges: {len(self.network.edge_ids)}")
+            logger.debug(f"Unexplored: {len(unexplored)} at iteration {i}")
+            if len(unexplored) == 0:
+                break
+            i += 1
 
         if self.verbose:
             logger.debug(f"Meta topics: {self.meta_topics_ids}")
             logger.debug(f"Meta topics: {len(self.meta_topics_ids)}")
             logger.debug(f"Topics: {len(self.topic_ids)}")
             logger.debug(f"Subtopics: {len(self.subtopic_ids)}")
+            logger.debug(f"Number of nodes: {len(self.network.node_ids)}")
+            logger.debug(f"Number of edges: {len(self.network.edge_ids)}")
 
         return self.network.json
 
@@ -186,6 +197,8 @@ class UNBISThesaurusScraper:
         return subtopics_ids
 
     def crawl_subtopics(self, ids: List[str]) -> None:
+        subsubtopics_ids = set()
+
         urls = [consts.JSON_BASE_URL.format(id_) for id_ in ids]
 
         if self.verbose:
@@ -219,11 +232,23 @@ class UNBISThesaurusScraper:
             related_topics = self._extract_related_subtopics(raw_json)
 
             for related_topic in related_topics:
+                if related_topic not in self.subtopic_ids:
+                    logger.warning(f"Related topic {related_topic} not found!")
+                    subsubtopics_ids.add(related_topic)
+
                 self.network.add_edge(
                     source=subtopic_id,
                     target=related_topic,
                     edge_type="subtopic->related",
                 )
+
+            # Extract subtopics from topic
+            _subsubtopic_ids = self._extract_subtopic_ids(raw_json)
+
+            # Update the set of subtopic ids
+            subsubtopics_ids.update(_subsubtopic_ids)
+
+        return subsubtopics_ids
 
     def export_to_json(self, file_path: str) -> None:
         """
