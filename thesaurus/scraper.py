@@ -1,10 +1,11 @@
 from typing import Any, Dict, List, Set
 
-import src.consts as consts
-import src.utils as utils
 from bs4 import BeautifulSoup
 from loguru import logger
-from src.network import Network
+
+import thesaurus.consts as consts
+import thesaurus.utils as utils
+from thesaurus.network import Network
 
 
 class UNBISThesaurusScraper:
@@ -36,9 +37,24 @@ class UNBISThesaurusScraper:
             The graph JSON
         """
         self.meta_topics_ids = self.get_meta_topics()
+        if self.verbose:
+            logger.debug(f"Number of nodes: {len(self.network.node_ids)}")
+            logger.debug(f"Number of edges: {len(self.network.edge_ids)}")
+
         self.topic_ids = self.crawl_meta_topics(ids=self.meta_topics_ids)
+        if self.verbose:
+            logger.debug(f"Number of nodes: {len(self.network.node_ids)}")
+            logger.debug(f"Number of edges: {len(self.network.edge_ids)}")
+
         self.subtopic_ids = self.crawl_topics(ids=self.topic_ids)
+        if self.verbose:
+            logger.debug(f"Number of nodes: {len(self.network.node_ids)}")
+            logger.debug(f"Number of edges: {len(self.network.edge_ids)}")
+
         self.crawl_subtopics(ids=self.subtopic_ids)
+        if self.verbose:
+            logger.debug(f"Number of nodes: {len(self.network.node_ids)}")
+            logger.debug(f"Number of edges: {len(self.network.edge_ids)}")
 
         if self.verbose:
             logger.debug(f"Meta topics: {self.meta_topics_ids}")
@@ -114,7 +130,6 @@ class UNBISThesaurusScraper:
             # Add edges between meta-topic and topics
             for topic_id in _topic_ids:
                 self.network.add_edge(
-                    edge_id=f"{meta_topic_id}->{topic_id}",
                     source=meta_topic_id,
                     target=topic_id,
                     edge_type="meta_topic->topic",
@@ -163,7 +178,6 @@ class UNBISThesaurusScraper:
             # Add edges between topic and subtopics
             for subtopic_id in _subtopic_ids:
                 self.network.add_edge(
-                    edge_id=f"{topic_id}->{subtopic_id}",
                     source=topic_id,
                     target=subtopic_id,
                     edge_type="topic->subtopic",
@@ -206,7 +220,6 @@ class UNBISThesaurusScraper:
 
             for related_topic in related_topics:
                 self.network.add_edge(
-                    edge_id=f"{subtopic_id}->{related_topic}",
                     source=subtopic_id,
                     target=related_topic,
                     edge_type="subtopic->related",
