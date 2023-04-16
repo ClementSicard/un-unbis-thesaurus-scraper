@@ -38,27 +38,8 @@ class UNBISThesaurusScraper:
         """
         logger.info("Started crawling the UNBIS Thesaurus...")
         self.meta_topics_ids = self.get_meta_topics()
-        logger.success(f"Found {len(self.meta_topics_ids)} meta topics.")
-
-        if self.verbose:
-            logger.debug(f"Number of nodes: {len(self.network.node_ids)}")
-            logger.debug(f"Number of edges: {len(self.network.edge_ids)}")
-
-        logger.info("Started crawling topics...")
         self.topic_ids = self.crawl_meta_topics(ids=self.meta_topics_ids)
-        logger.success(f"Found {len(self.topic_ids)} topics.")
-
-        if self.verbose:
-            logger.debug(f"Number of nodes: {len(self.network.node_ids)}")
-            logger.debug(f"Number of edges: {len(self.network.edge_ids)}")
-
-        logger.info("Started crawling subtopics...")
         self.subtopic_ids = self.crawl_topics(ids=self.topic_ids)
-        logger.success(f"Found {len(self.subtopic_ids)} subtopics.")
-
-        if self.verbose:
-            logger.debug(f"Number of nodes: {len(self.network.node_ids)}")
-            logger.debug(f"Number of edges: {len(self.network.edge_ids)}")
 
         logger.info("Recusrively crawling subsubtopics...")
         i = 1
@@ -66,9 +47,7 @@ class UNBISThesaurusScraper:
         while True:
             unexplored = self.crawl_subtopics(ids=unexplored)
             self.subtopic_ids.update(unexplored)
-            if self.verbose:
-                logger.debug(f"Number of nodes: {len(self.network.node_ids)}")
-                logger.debug(f"Number of edges: {len(self.network.edge_ids)}")
+
             logger.debug(f"Unexplored: {len(unexplored)} at iteration {i}")
             if len(unexplored) == 0:
                 break
@@ -79,10 +58,10 @@ class UNBISThesaurusScraper:
             logger.debug(f"Meta topics: {len(self.meta_topics_ids)}")
             logger.debug(f"Topics: {len(self.topic_ids)}")
             logger.debug(f"Subtopics: {len(self.subtopic_ids)}")
-            logger.debug(f"Number of nodes: {len(self.network.node_ids)}")
-            logger.debug(f"Number of edges: {len(self.network.edge_ids)}")
+            logger.debug(f"Number of nodes: {len(self.network.G.nodes)}")
+            logger.debug(f"Number of edges: {len(self.network.G.edges)}")
 
-        return self.network.json
+        return self.network.to_json()
 
     def get_meta_topics(self) -> List[str]:
         """
@@ -106,6 +85,11 @@ class UNBISThesaurusScraper:
             meta_topic_name = raw_meta_topic.find(class_="bc-link domain").text
             meta_topic_id = meta_topic_name.split(" - ")[0]
             meta_topic_ids.add(meta_topic_id)
+
+        if self.verbose:
+            logger.success(f"Found {len(meta_topic_ids)} meta topics.")
+            logger.debug(f"Number of nodes: {len(self.network.G.nodes)}")
+            logger.debug(f"Number of edges: {len(self.network.G.edges)}")
 
         return meta_topic_ids
 
@@ -154,13 +138,17 @@ class UNBISThesaurusScraper:
                     source=meta_topic_id,
                     target=topic_id,
                     edge_type="meta_topic->topic",
-                    other=True,
                 )
+
+        if self.verbose:
+            logger.success(f"Found {len(topic_ids)} topics.")
+            logger.debug(f"Number of nodes: {len(self.network.G.nodes)}")
+            logger.debug(f"Number of edges: {len(self.network.G.edges)}")
 
         return topic_ids
 
     def crawl_topics(self, ids: List[str]) -> List[str]:
-        subtopics_ids = set()
+        subtopic_ids = set()
 
         urls = [consts.JSON_BASE_URL.format(id_) for id_ in ids]
 
@@ -197,7 +185,7 @@ class UNBISThesaurusScraper:
             _subtopic_ids = self._extract_subtopic_ids(raw_json)
 
             # Update the set of subtopic ids
-            subtopics_ids.update(_subtopic_ids)
+            subtopic_ids.update(_subtopic_ids)
 
             # Add edges between topic and subtopics
             for subtopic_id in _subtopic_ids:
@@ -205,13 +193,17 @@ class UNBISThesaurusScraper:
                     source=topic_id,
                     target=subtopic_id,
                     edge_type="topic->subtopic",
-                    other=True,
                 )
 
-        return subtopics_ids
+        if self.verbose:
+            logger.success(f"Found {len(subtopic_ids)} subtopics.")
+            logger.debug(f"Number of nodes: {len(self.network.G.nodes)}")
+            logger.debug(f"Number of edges: {len(self.network.G.edges)}")
+
+        return subtopic_ids
 
     def crawl_subtopics(self, ids: List[str]) -> None:
-        subsubtopics_ids = set()
+        subsubtopic_ids = set()
 
         urls = [consts.JSON_BASE_URL.format(id_) for id_ in ids]
 
@@ -252,22 +244,28 @@ class UNBISThesaurusScraper:
                     if self.verbose:
                         logger.warning(f"Related topic {related_topic} not found!")
 
-                    subsubtopics_ids.add(related_topic)
+                    subsubtopic_ids.add(related_topic)
 
                 self.network.add_edge(
                     source=subtopic_id,
                     target=related_topic,
                     edge_type="subtopic->related",
-                    other=True,
                 )
 
             # Extract subtopics from topic
             _subsubtopic_ids = self._extract_subtopic_ids(raw_json)
 
             # Update the set of subtopic ids
-            subsubtopics_ids.update(_subsubtopic_ids)
+            subsubtopic_ids.update(_subsubtopic_ids)
 
-        return subsubtopics_ids
+        if self.verbose:
+            logger.success(
+                f"Found {len(subsubtopic_ids)} subsubtopics/related subtopics."
+            )
+            logger.debug(f"Number of nodes: {len(self.network.G.nodes)}")
+            logger.debug(f"Number of edges: {len(self.network.G.edges)}")
+
+        return subsubtopic_ids
 
     def export_to_json(self, file_path: str) -> None:
         """
@@ -290,13 +288,15 @@ class UNBISThesaurusScraper:
         import os
 
         # Create the directory upstream if they don't exist
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        dirname = os.path.dirname(file_path)
+        if dirname:
+            os.makedirs(dirname, exist_ok=True)
 
         with open(file_path, "w") as f:
-            json.dump(self.network.json, f, indent=4, ensure_ascii=False)
+            json.dump(self.network.to_json(), f, indent=4, ensure_ascii=False)
 
-        logger.debug(f"Total nodes: {len(self.network.node_ids)}")
-        logger.debug(f"Total edges: {len(self.network.edge_ids)}")
+        logger.debug(f"Total nodes: {len(self.network.G.nodes)}")
+        logger.debug(f"Total edges: {len(self.network.G.edges)}")
         logger.success(f"Saved network JSON to {file_path}!")
 
     def _extract_labels(
@@ -471,10 +471,11 @@ class UNBISThesaurusScraper:
         topics = set()
 
         if key not in json_:
-            if self.verbose:
-                logger.error(
-                    f"Key {key} not found in JSON object in {json_[consts.KEYS['ID']]}"
-                )
+            # if self.verbose:
+            #     logger.error(
+            #         f"Key {key} not found in JSON object in {json_[consts.KEYS['ID']]}"
+            #     )
+            pass
         else:
             for obj in json_[key]:
                 url = obj[consts.KEYS["ID"]]

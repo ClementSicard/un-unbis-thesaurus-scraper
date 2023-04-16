@@ -1,23 +1,17 @@
 import random
 from typing import Optional
 
-from loguru import logger
+import networkx as nx
+from tqdm import tqdm
 
 import thesaurus.consts as consts
 
 
 class Network:
     def __init__(self, verbose: bool = False) -> None:
-        self.json = {
-            "nodes": [],
-            "edges": [],
-            "clusters": consts.CLUSTERS,
-            "tags": consts.TAGS,
-        }
+        self.G = nx.Graph(name="UNBIS Thesaurus")
 
         self.verbose = verbose
-        self.node_ids = set()
-        self.edge_ids = set()
 
     def add_node(
         self,
@@ -56,64 +50,56 @@ class Network:
         """
         assert node_type in consts.NODE_TYPES, f"Invalid type {node_type}"
 
-        if node_id not in self.node_ids:
-            # Save node id to set of node ids
-            self.node_ids.add(node_id)
+        # Save node id to set of node ids
+        node_json = {
+            "key": node_id,
+            "x": (random.random() - 0.5) * 1000,
+            "y": (random.random() - 0.5) * 1000,
+            "cluster": cluster,
+            "url": consts.BASE_URL.format(node_id),
+            "node_type": node_type,
+            "tag": "Concept",
+            "label": label_en,
+            "label_ar": label_ar,
+            "label_es": label_es,
+            "label_fr": label_fr,
+            "label_ru": label_ru,
+            "label_zh": label_zh,
+        }
 
-            node_json = {
-                "key": node_id,
-                "x": (random.random() - 0.5) * 1000,
-                "y": (random.random() - 0.5) * 1000,
-                "cluster": cluster,
-                "url": consts.BASE_URL.format(node_id),
-                "node_type": node_type,
-                "tag": "Concept",
-                "label": label_en,
-                "label_ar": label_ar,
-                "label_es": label_es,
-                "label_fr": label_fr,
-                "label_ru": label_ru,
-                "label_zh": label_zh,
-            }
-
-            self.json["nodes"].append(node_json)
-        else:
-            if self.verbose:
-                logger.warning(f"Node {node_id} already exists")
+        self.G.add_node(node_id, **node_json)
 
     def add_edge(
         self,
         source: str,
         target: str,
-        size: float = 1.0,
-        label: Optional[str] = None,
         edge_type: str = "topic->subtopic",
-        other: bool = True,
     ) -> None:
         assert edge_type in consts.EDGE_TYPES, f"Invalid edge type {edge_type}"
-        edge_id = f"{source}-{target}"
-        alt_edge_id = f"{target}-{source}"
 
-        # To avoid duplicate edges
-        if edge_id not in self.edge_ids and alt_edge_id not in self.edge_ids:
-            # Save edge id to set of edge ids
-            self.edge_ids.add(edge_id)
-            if not other:
-                edge_json = {
-                    "key": edge_id,
-                    "source": source,
-                    "target": target,
-                    "attributes": {
-                        "edge_type": edge_type,
-                        "size": size,
-                        "label": label,
-                        "color": consts.COLORS[edge_type],
-                    },
-                }
-            else:
-                edge_json = [source, target]
+        edge_id = (source, target)
 
-            self.json["edges"].append(edge_json)
-        else:
-            if self.verbose:
-                logger.warning(f"Edge {edge_id} already exists")
+        self.G.add_edge(*edge_id, edge_type=edge_type)
+
+    def to_json(self) -> dict:
+        """
+        Returns
+        -------
+        `dict`
+            JSON representation of the graph
+        """
+        j = nx.readwrite.json_graph.node_link_data(self.G, link="edges")
+
+        # Replace weird format for edges
+        edges = [[e["source"], e["target"]] for e in j["edges"]]
+        j["edges"] = edges
+
+        centrality = nx.betweenness_centrality(self.G)
+        for node in tqdm(j["nodes"]):
+            node["score"] = centrality.get(node["key"], 0)
+
+        # Add clusters & tags
+        j["clusters"] = consts.CLUSTERS
+        j["tags"] = consts.TAGS
+
+        return j
