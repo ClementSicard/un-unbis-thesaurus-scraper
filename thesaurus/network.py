@@ -11,6 +11,8 @@ class Network:
         self.json = {
             "nodes": [],
             "edges": [],
+            "clusters": consts.CLUSTERS,
+            "tags": consts.TAGS,
         }
 
         self.verbose = verbose
@@ -20,6 +22,7 @@ class Network:
     def add_node(
         self,
         node_id: str,
+        cluster: int,
         label_en: Optional[str] = None,
         label_ar: Optional[str] = None,
         label_es: Optional[str] = None,
@@ -59,24 +62,24 @@ class Network:
 
             node_json = {
                 "key": node_id,
-                "x": random.random(),
-                "y": random.random(),
-                "attributes": {
-                    "node_type": node_type,
-                    "color": consts.COLORS[node_type],
-                    "size": consts.SIZES[node_type],
-                    "label": label_en,
-                    "label_ar": label_ar,
-                    "label_es": label_es,
-                    "label_fr": label_fr,
-                    "label_ru": label_ru,
-                    "label_zh": label_zh,
-                },
+                "x": (random.random() - 0.5) * 1000,
+                "y": (random.random() - 0.5) * 1000,
+                "cluster": cluster,
+                "url": consts.BASE_URL.format(node_id),
+                "node_type": node_type,
+                "tag": "Concept",
+                "label": label_en,
+                "label_ar": label_ar,
+                "label_es": label_es,
+                "label_fr": label_fr,
+                "label_ru": label_ru,
+                "label_zh": label_zh,
             }
 
             self.json["nodes"].append(node_json)
         else:
-            logger.warning(f"Node {node_id} already exists")
+            if self.verbose:
+                logger.warning(f"Node {node_id} already exists")
 
     def add_edge(
         self,
@@ -85,6 +88,7 @@ class Network:
         size: float = 1.0,
         label: Optional[str] = None,
         edge_type: str = "topic->subtopic",
+        other: bool = True,
     ) -> None:
         assert edge_type in consts.EDGE_TYPES, f"Invalid edge type {edge_type}"
         edge_id = f"{source}-{target}"
@@ -94,17 +98,22 @@ class Network:
         if edge_id not in self.edge_ids and alt_edge_id not in self.edge_ids:
             # Save edge id to set of edge ids
             self.edge_ids.add(edge_id)
-
-            edge_json = {
-                "key": edge_id,
-                "source": source,
-                "target": target,
-                "attributes": {
-                    "edge_type": edge_type,
-                    "size": size,
-                    "label": label,
-                    "color": consts.COLORS[edge_type],
-                },
-            }
+            if not other:
+                edge_json = {
+                    "key": edge_id,
+                    "source": source,
+                    "target": target,
+                    "attributes": {
+                        "edge_type": edge_type,
+                        "size": size,
+                        "label": label,
+                        "color": consts.COLORS[edge_type],
+                    },
+                }
+            else:
+                edge_json = [source, target]
 
             self.json["edges"].append(edge_json)
+        else:
+            if self.verbose:
+                logger.warning(f"Edge {edge_id} already exists")

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Set, Union
 
 from bs4 import BeautifulSoup
 from loguru import logger
@@ -36,17 +36,26 @@ class UNBISThesaurusScraper:
         `Dict[str, Any]`
             The graph JSON
         """
+        logger.info("Started crawling the UNBIS Thesaurus...")
         self.meta_topics_ids = self.get_meta_topics()
+        logger.success(f"Found {len(self.meta_topics_ids)} meta topics.")
+
         if self.verbose:
             logger.debug(f"Number of nodes: {len(self.network.node_ids)}")
             logger.debug(f"Number of edges: {len(self.network.edge_ids)}")
 
+        logger.info("Started crawling topics...")
         self.topic_ids = self.crawl_meta_topics(ids=self.meta_topics_ids)
+        logger.success(f"Found {len(self.topic_ids)} topics.")
+
         if self.verbose:
             logger.debug(f"Number of nodes: {len(self.network.node_ids)}")
             logger.debug(f"Number of edges: {len(self.network.edge_ids)}")
 
+        logger.info("Started crawling subtopics...")
         self.subtopic_ids = self.crawl_topics(ids=self.topic_ids)
+        logger.success(f"Found {len(self.subtopic_ids)} subtopics.")
+
         if self.verbose:
             logger.debug(f"Number of nodes: {len(self.network.node_ids)}")
             logger.debug(f"Number of edges: {len(self.network.edge_ids)}")
@@ -123,6 +132,7 @@ class UNBISThesaurusScraper:
 
             self.network.add_node(
                 node_id=meta_topic_id,
+                cluster=int(meta_topic_id),
                 label_en=labels.get("en"),
                 label_ar=labels.get("ar"),
                 label_es=labels.get("es"),
@@ -144,6 +154,7 @@ class UNBISThesaurusScraper:
                     source=meta_topic_id,
                     target=topic_id,
                     edge_type="meta_topic->topic",
+                    other=True,
                 )
 
         return topic_ids
@@ -168,9 +179,11 @@ class UNBISThesaurusScraper:
             topic_url = raw_json[consts.KEYS["ID"]]
             topic_id = self._extract_id_from_url(topic_url)
             labels = self._extract_labels(raw_json)
+            cluster = self._extract_cluster(raw_json)
 
             self.network.add_node(
                 node_id=topic_id,
+                cluster=cluster,
                 label_en=labels.get("en"),
                 label_ar=labels.get("ar"),
                 label_es=labels.get("es"),
@@ -192,6 +205,7 @@ class UNBISThesaurusScraper:
                     source=topic_id,
                     target=subtopic_id,
                     edge_type="topic->subtopic",
+                    other=True,
                 )
 
         return subtopics_ids
@@ -216,9 +230,11 @@ class UNBISThesaurusScraper:
             subtopic_url = raw_json[consts.KEYS["ID"]]
             subtopic_id = self._extract_id_from_url(subtopic_url)
             labels = self._extract_labels(raw_json, is_subtopic=True)
+            cluster = self._extract_cluster(raw_json)
 
             self.network.add_node(
                 node_id=subtopic_id,
+                cluster=cluster,
                 label_en=labels.get("en"),
                 label_ar=labels.get("ar"),
                 label_es=labels.get("es"),
@@ -233,13 +249,16 @@ class UNBISThesaurusScraper:
 
             for related_topic in related_topics:
                 if related_topic not in self.subtopic_ids:
-                    logger.warning(f"Related topic {related_topic} not found!")
+                    if self.verbose:
+                        logger.warning(f"Related topic {related_topic} not found!")
+
                     subsubtopics_ids.add(related_topic)
 
                 self.network.add_edge(
                     source=subtopic_id,
                     target=related_topic,
                     edge_type="subtopic->related",
+                    other=True,
                 )
 
             # Extract subtopics from topic
@@ -276,6 +295,8 @@ class UNBISThesaurusScraper:
         with open(file_path, "w") as f:
             json.dump(self.network.json, f, indent=4, ensure_ascii=False)
 
+        logger.debug(f"Total nodes: {len(self.network.node_ids)}")
+        logger.debug(f"Total edges: {len(self.network.edge_ids)}")
         logger.success(f"Saved network JSON to {file_path}!")
 
     def _extract_labels(
@@ -461,3 +482,14 @@ class UNBISThesaurusScraper:
                 topics.add(id_)
 
         return topics
+
+    def _extract_cluster(self, json_: Dict[str, Any]) -> Union[int, None]:
+        if consts.KEYS["CLUSTER"] not in json_:
+            if self.verbose:
+                logger.error(
+                    f"Key {consts.KEYS['CLUSTER']} not found in JSON object in {json_[consts.KEYS['ID']]}"
+                )
+            return consts.UNKNOWN_CLUSTER
+        else:
+            clusters = json_[consts.KEYS["CLUSTER"]]
+            return self._extract_id_from_url(clusters[0][consts.KEYS["ID"]])
