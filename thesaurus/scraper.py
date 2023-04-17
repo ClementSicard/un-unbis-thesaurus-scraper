@@ -116,7 +116,7 @@ class UNBISThesaurusScraper:
 
             self.network.add_node(
                 node_id=meta_topic_id,
-                cluster=int(meta_topic_id),
+                cluster=meta_topic_id,
                 label_en=labels.get("en"),
                 label_ar=labels.get("ar"),
                 label_es=labels.get("es"),
@@ -187,6 +187,12 @@ class UNBISThesaurusScraper:
             # Update the set of subtopic ids
             subtopic_ids.update(_subtopic_ids)
 
+            # Add an edge from a topic to its cluster
+            self.network.add_edge(
+                source=cluster,
+                target=topic_id,
+            )
+
             # Add edges between topic and subtopics
             for subtopic_id in _subtopic_ids:
                 self.network.add_edge(
@@ -238,6 +244,12 @@ class UNBISThesaurusScraper:
 
             # Add edges to related topics
             related_topics = self._extract_related_subtopics(raw_json)
+
+            # Add an edge from a topic to its cluster
+            self.network.add_edge(
+                source=cluster,
+                target=subtopic_id,
+            )
 
             for related_topic in related_topics:
                 if related_topic not in self.subtopic_ids:
@@ -469,18 +481,13 @@ class UNBISThesaurusScraper:
             The list of parsed topics
         """
         topics = set()
-
         if key not in json_:
-            # if self.verbose:
-            #     logger.error(
-            #         f"Key {key} not found in JSON object in {json_[consts.KEYS['ID']]}"
-            #     )
-            pass
-        else:
-            for obj in json_[key]:
-                url = obj[consts.KEYS["ID"]]
-                id_ = self._extract_id_from_url(url)
-                topics.add(id_)
+            return topics
+
+        for obj in json_[key]:
+            url = obj[consts.KEYS["ID"]]
+            id_ = self._extract_id_from_url(url)
+            topics.add(id_)
 
         return topics
 

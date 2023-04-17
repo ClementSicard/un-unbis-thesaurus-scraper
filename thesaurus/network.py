@@ -2,6 +2,7 @@ import random
 from typing import Optional
 
 import networkx as nx
+from loguru import logger
 from tqdm import tqdm
 
 import thesaurus.consts as consts
@@ -94,7 +95,10 @@ class Network:
         edges = [[e["source"], e["target"]] for e in j["edges"]]
         j["edges"] = edges
 
-        centrality = nx.betweenness_centrality(self.G)
+        logger.info("Calculating betweenness centrality...")
+        centrality = nx.eigenvector_centrality(self.G)
+        logger.success("Done!")
+
         for node in tqdm(j["nodes"]):
             node["score"] = centrality.get(node["key"], 0)
 
