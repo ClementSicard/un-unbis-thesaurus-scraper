@@ -11,6 +11,7 @@ import thesaurus.consts as consts
 class Network:
     def __init__(self, verbose: bool = False) -> None:
         self.G = nx.Graph(name="UNBIS Thesaurus")
+        self.clusters = []
 
         self.verbose = verbose
 
@@ -60,7 +61,7 @@ class Network:
             "url": consts.BASE_URL.format(node_id),
             "node_type": node_type,
             "tag": "Concept",
-            "label": label_en,
+            "label_en": label_en,
             "label_ar": label_ar,
             "label_es": label_es,
             "label_fr": label_fr,
@@ -102,8 +103,7 @@ class Network:
         for node in tqdm(j["nodes"]):
             node["score"] = centrality.get(node["key"], 0)
 
-        # Add clusters & tags
-        j["clusters"] = consts.CLUSTERS
-        j["tags"] = consts.TAGS
+        # Add clusters to json
+        j["clusters"] = self.clusters
 
         return j
