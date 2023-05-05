@@ -19,7 +19,6 @@ class UNBISThesaurusScraper:
 
         # Save all the ids to avoid duplicates
         self.network = Network(verbose=self.verbose)
-
         self.meta_topics_ids = set()
         self.topic_ids = set()
         self.subtopic_ids = set()
@@ -126,6 +125,19 @@ class UNBISThesaurusScraper:
                 node_type="meta_topic",
             )
 
+            self.network.clusters.append(
+                {
+                    "key": meta_topic_id,
+                    "cluster_label_en": labels.get("en"),
+                    "cluster_label_ar": labels.get("ar"),
+                    "cluster_label_es": labels.get("es"),
+                    "cluster_label_fr": labels.get("fr"),
+                    "cluster_label_ru": labels.get("ru"),
+                    "cluster_label_zh": labels.get("zh"),
+                    "color": consts.CLUSTERS_COLORS[int(meta_topic_id) - 1],
+                }
+            )
+
             # Extract topics from meta-topic
             _topic_ids = self._extract_topic_ids(raw_json)
 
@@ -222,6 +234,9 @@ class UNBISThesaurusScraper:
             logger.success("Done!")
 
         for raw_json in jsons:
+            if not raw_json:
+                logger.warning("Empty JSON")
+                continue
             # Add subtopic node
             raw_json = raw_json[0]
 
