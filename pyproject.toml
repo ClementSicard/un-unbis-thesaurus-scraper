@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "thesaurus"
-version = "0.1.0"
+version = "1.0.0"
 description = "Python scraper to scrape UNBIS Thesaurus database"
 authors = ["Clément Sicard, <clement.sicard@icloud.com>"]
 license = "MIT"
