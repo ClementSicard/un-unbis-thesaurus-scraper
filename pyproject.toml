@@ -20,6 +20,15 @@ tqdm = "^4.65.0"
 ruff = "^0.0.261"
 isort = "^5.12.0"
 pre-commit = "^3.2.2"
+mypy = "^1.4.1"
+interrogate = "^1.5.0"
+
+[tool.interrogate]
+ignore-init-method = true
+ignore-init-module = true
+ignore-module = true
+fail-under = 100
+verbose = 2
 
 [build-system]
 requires = ["poetry-core"]
