@@ -9,6 +9,10 @@ from loguru import logger
 
 
 class FastURLDownloader:
+    """
+    Class to efficiently download multiple URLs in parallel using `asyncio` and `aiohttp`.
+    """
+
     def __init__(self, verbose: bool = False) -> None:
         self.verbose = verbose
 
@@ -17,32 +21,72 @@ class FastURLDownloader:
         url: str,
         session: aiohttp.ClientSession,
         headers: Optional[Dict[str, Any]] = None,
-        to_json: bool = False,
-    ) -> None:
+        toJson: bool = False,
+    ) -> str | Dict[str, Any]:
+        """
+        Function to download a single url. This is a coroutine.
+
+        Parameters
+        ----------
+        `url` : `str`
+            URL to download
+        `session` : `aiohttp.ClientSession`
+            Session to use for downloading
+        `headers` : `Optional[Dict[str, Any]]`, optional
+            Headers to add to the request, by default `None`
+        `toJson` : `bool`, optional
+            Flag to transform response to JSON, by default `False`
+
+        Returns
+        -------
+        `str | Dict[str, Any]`
+            Response from the URL. If `toJson` is `True`, then the response is a
+            JSON object. Otherwise, it is a string.
+        """
         try:
             async with session.get(url=url, headers=headers) as response:
-                resp = await response.read()
-                if to_json:
-                    return json.loads(resp.decode("utf-8"))
+                resp: bytes = await response.read()
+                if toJson:
+                    ret: Dict[str, Any] = json.loads(resp.decode("utf-8"))
+                    return ret
 
                 return resp.decode("utf-8")
         except Exception as e:
             logger.error(f"Unable to get url {url} due to {e}.")
+            raise e
 
-    async def download_multiple_urls(
+    async def downloadMultipleURLs(
         self,
         urls: List[str],
         headers: Optional[Dict[str, Any]] = None,
-        to_json: bool = False,
-    ):
+        toJson: bool = False,
+    ) -> List[str | Dict[str, Any]]:
+        """
+        Function to download multiple urls in parallel. This is a coroutine.
+
+        Parameters
+        ----------
+        `urls` : `List[str]`
+            List of URLs to download
+        `headers` : `Optional[Dict[str, Any]]`, optional
+            Headers to add to the request, by default `None`
+        `toJson` : `bool`, optional
+            Flag to return response as JSON, by default `False`
+
+        Returns
+        -------
+        `List[str | Dict[str, Any]]`
+            List of responses from the URLs. If `toJson` is `True`, then the response is a
+            JSON object. Otherwise, it is a string.
+        """
         async with aiohttp.ClientSession() as session:
-            ret = await asyncio.gather(
+            ret: List[str | Dict[str, Any]] = await asyncio.gather(
                 *[
                     self.get(
                         url=url,
                         session=session,
                         headers=headers,
-                        to_json=to_json,
+                        toJson=toJson,
                     )
                     for url in urls
                 ]
@@ -55,18 +99,35 @@ class FastURLDownloader:
 
         return ret
 
-    def get_urls(
+    def getURLs(
         self,
         urls: List[str],
         headers: Optional[Dict[str, Any]] = None,
-        to_json: bool = False,
-    ):
+        toJson: bool = False,
+    ) -> List[str | Dict[str, Any]]:
+        """
+        Function to download multiple urls in parallel.
+
+        Parameters
+        ----------
+        `urls` : `List[str]`
+            List of URLs to download
+        `headers` : `Optional[Dict[str, Any]]`, optional
+            Headers to add to the request, by default `None`
+        `toJson` : `bool`, optional
+            Flag to export to JSON, by default `False`
+
+        Returns
+        -------
+        `List[str | Dict[str, Any]]`
+            _description_
+        """
         start = time.time()
         results = asyncio.run(
-            self.download_multiple_urls(
+            self.downloadMultipleURLs(
                 urls=urls,
                 headers=headers,
-                to_json=to_json,
+                toJson=toJson,
             )
         )
         end = time.time()
@@ -78,14 +139,34 @@ class FastURLDownloader:
 
         return results
 
-    def get_html(
+    def getHtmlFromURL(
         self,
         url: str,
         headers: Optional[Dict[str, Any]] = None,
-        to_json: bool = False,
-    ) -> str:
+        toJson: bool = False,
+    ) -> str | Dict[str, Any]:
+        """
+        Function to get the HTML content of a URL.
+
+        Parameters
+        ----------
+        `url` : `str`
+            URL to download
+        `headers` : `Optional[Dict[str, Any]]`, optional
+            Headers to add to the request, by default `None`
+        `toJson` : `bool`, optional
+            Flag to return response as a JSON, by default `False`
+
+        Returns
+        -------
+        `str | Dict[str, Any]`
+            Response from the URL. If `toJson` is `True`, then the response is a
+            JSON object. Otherwise, it is a string.
+        """
         r = requests.get(url, headers=headers)
-        if to_json:
-            return r.json()
+
+        if toJson:
+            j: Dict[str, Any] = r.json()
+            return j
 
         return r.content.decode("utf-8")
