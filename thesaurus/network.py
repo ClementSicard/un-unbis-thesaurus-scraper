@@ -32,15 +32,15 @@ class Network:
         nodeType: str = "topic",
     ) -> None:
         """
-        Adds a node to the graph. Also saves the node id to the set of node ids.
+        Adds a node to the graph. Also saves the node ID to the set of node ids.
         Node size and color are defined in `consts.py` and are based on the node type.
 
         Parameters
         ----------
         `nodeId` : `str`
-            Unique id of the node, same as in UNBIS Thesaurus
+            Unique ID of the node, same as in UNBIS Thesaurus
         `cluster` : `int`
-            Cluster id of the node
+            Cluster ID of the node
         `labelEn` : `Optional[str]`, optional
             Label in English, by default `None`
         `labelAr` : `Optional[str]`, optional
@@ -59,7 +59,7 @@ class Network:
 
         assert nodeType in consts.NODE_TYPES, f"Invalid type {nodeType}"
 
-        # Save node id to set of node ids
+        # Save node ID to set of node ids
         node_json = {
             "key": nodeId,
             "x": (random.random() - 0.5) * 1000,
