@@ -7,6 +7,8 @@ import aiohttp
 import requests
 from loguru import logger
 
+from thesaurus.consts import JSON
+
 
 class FastURLDownloader:
     """
@@ -22,7 +24,7 @@ class FastURLDownloader:
         session: aiohttp.ClientSession,
         headers: Optional[Dict[str, Any]] = None,
         toJson: bool = False,
-    ) -> str | Dict[str, Any]:
+    ) -> str | JSON:
         """
         Function to download a single url. This is a coroutine.
 
@@ -39,7 +41,7 @@ class FastURLDownloader:
 
         Returns
         -------
-        `str | Dict[str, Any]`
+        `str | JSON`
             Response from the URL. If `toJson` is `True`, then the response is a
             JSON object. Otherwise, it is a string.
         """
@@ -60,7 +62,7 @@ class FastURLDownloader:
         urls: List[str],
         headers: Optional[Dict[str, Any]] = None,
         toJson: bool = False,
-    ) -> List[str | Dict[str, Any]]:
+    ) -> List[str | JSON]:
         """
         Function to download multiple urls in parallel. This is a coroutine.
 
@@ -75,12 +77,12 @@ class FastURLDownloader:
 
         Returns
         -------
-        `List[str | Dict[str, Any]]`
+        `List[str | JSON]`
             List of responses from the URLs. If `toJson` is `True`, then the response is a
             JSON object. Otherwise, it is a string.
         """
         async with aiohttp.ClientSession() as session:
-            ret: List[str | Dict[str, Any]] = await asyncio.gather(
+            ret: List[str | JSON] = await asyncio.gather(
                 *[
                     self.get(
                         url=url,
@@ -104,7 +106,7 @@ class FastURLDownloader:
         urls: List[str],
         headers: Optional[Dict[str, Any]] = None,
         toJson: bool = False,
-    ) -> List[str | Dict[str, Any]]:
+    ) -> List[str | JSON]:
         """
         Function to download multiple urls in parallel.
 
@@ -144,7 +146,7 @@ class FastURLDownloader:
         url: str,
         headers: Optional[Dict[str, Any]] = None,
         toJson: bool = False,
-    ) -> str | Dict[str, Any]:
+    ) -> str | JSON:
         """
         Function to get the HTML content of a URL.
 
@@ -159,7 +161,7 @@ class FastURLDownloader:
 
         Returns
         -------
-        `str | Dict[str, Any]`
+        `str | JSON`
             Response from the URL. If `toJson` is `True`, then the response is a
             JSON object. Otherwise, it is a string.
         """
