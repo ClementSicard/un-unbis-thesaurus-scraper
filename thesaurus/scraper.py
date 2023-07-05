@@ -1,29 +1,36 @@
-from typing import Any, Dict, List, Set, Union
+from typing import Dict, Set
 
 from bs4 import BeautifulSoup
 from loguru import logger
 
 import thesaurus.consts as consts
 import thesaurus.utils as utils
+from thesaurus.consts import JSON
 from thesaurus.network import Network
 
 
 class UNBISThesaurusScraper:
+    """
+    This class is responsible for crawling the UNBIS Thesaurus and recursively
+    creating a graph of the topics and subtopics. It uses the `Network`
+    class to create the graph.
+    """
+
     def __init__(
         self,
         verbose: bool,
     ) -> None:
         self.verbose = verbose
-        self.url_dl = utils.FastURLDownloader(verbose=self.verbose)
+        self.urlDownloader = utils.FastURLDownloader(verbose=self.verbose)
         self.BASE_URL = "https://metadata.un.org/thesaurus/categories?lang=en"
 
         # Save all the ids to avoid duplicates
         self.network = Network(verbose=self.verbose)
-        self.meta_topics_ids = set()
-        self.topic_ids = set()
-        self.subtopic_ids = set()
+        self.metaTopicsIds: Set[str] = set()
+        self.topicIds: Set[str] = set()
+        self.subtopicIds: Set[str] = set()
 
-    def crawl(self) -> Dict[str, Any]:
+    def crawl(self) -> JSON:
         """
         Crawls the whole UNBIS Thesaurus and returns the graph JSON.
         It first gets the meta topics, then the topics, and finally
@@ -32,20 +39,20 @@ class UNBISThesaurusScraper:
 
         Returns
         -------
-        `Dict[str, Any]`
+        `JSON`
             The graph JSON
         """
         logger.info("Started crawling the UNBIS Thesaurus...")
-        self.meta_topics_ids = self.get_meta_topics()
-        self.topic_ids = self.crawl_meta_topics(ids=self.meta_topics_ids)
-        self.subtopic_ids = self.crawl_topics(ids=self.topic_ids)
+        self.metaTopicsIds = self.getMetaTopicsIds()
+        self.topicIds = self.crawlMetaTopics(ids=self.metaTopicsIds)
+        self.subtopicIds = self.crawlTopics(ids=self.topicIds)
 
         logger.info("Recusrively crawling subsubtopics...")
         i = 1
-        unexplored = self.subtopic_ids
+        unexplored = self.subtopicIds
         while True:
-            unexplored = self.crawl_subtopics(ids=unexplored)
-            self.subtopic_ids.update(unexplored)
+            unexplored = self.crawlSubtopics(ids=unexplored)
+            self.subtopicIds.update(unexplored)
 
             logger.debug(f"Unexplored: {len(unexplored)} at iteration {i}")
             if len(unexplored) == 0:
@@ -53,16 +60,16 @@ class UNBISThesaurusScraper:
             i += 1
 
         if self.verbose:
-            logger.debug(f"Meta topics: {self.meta_topics_ids}")
-            logger.debug(f"Meta topics: {len(self.meta_topics_ids)}")
-            logger.debug(f"Topics: {len(self.topic_ids)}")
-            logger.debug(f"Subtopics: {len(self.subtopic_ids)}")
+            logger.debug(f"Meta topics: {self.metaTopicsIds}")
+            logger.debug(f"Meta topics: {len(self.metaTopicsIds)}")
+            logger.debug(f"Topics: {len(self.topicIds)}")
+            logger.debug(f"Subtopics: {len(self.subtopicIds)}")
             logger.debug(f"Number of nodes: {len(self.network.G.nodes)}")
             logger.debug(f"Number of edges: {len(self.network.G.edges)}")
 
-        return self.network.to_json()
+        return self.network.toJson()
 
-    def get_meta_topics(self) -> List[str]:
+    def getMetaTopicsIds(self) -> Set[str]:
         """
         This function parses the home page of the Thesaurus and returns the
         meta topics ids. It doesn't add nodes to the graph - it only returns
@@ -70,231 +77,270 @@ class UNBISThesaurusScraper:
 
         Returns
         -------
-        `List[str]`
-            The list of meta topic ids
+        `Set[str]`
+            The set of meta topic ids
         """
-        meta_topic_ids = set()
-        html = self.url_dl.get_html(self.BASE_URL)
+        metaTopicsIds: Set[str] = set()
+        html = self.urlDownloader.getHtmlFromURL(self.BASE_URL)
         soup = BeautifulSoup(html, "html.parser")
 
         class_ = "row collapsible"
-        raw_meta_topics = soup.find_all(class_=class_)
+        rawMetaTopics = soup.find_all(class_=class_)
 
-        for raw_meta_topic in raw_meta_topics:
-            meta_topic_name = raw_meta_topic.find(class_="bc-link domain").text
-            meta_topic_id = meta_topic_name.split(" - ")[0]
-            meta_topic_ids.add(meta_topic_id)
+        for rawMetaTopic in rawMetaTopics:
+            metaTopicName = rawMetaTopic.find(class_="bc-link domain").text
+            metaTopicId = metaTopicName.split(" - ")[0]
+            metaTopicsIds.add(metaTopicId)
 
         if self.verbose:
-            logger.success(f"Found {len(meta_topic_ids)} meta topics.")
+            logger.success(f"Found {len(metaTopicsIds)} meta topics.")
             logger.debug(f"Number of nodes: {len(self.network.G.nodes)}")
             logger.debug(f"Number of edges: {len(self.network.G.edges)}")
 
-        return meta_topic_ids
+        return metaTopicsIds
 
-    def crawl_meta_topics(self, ids: List[str]) -> List[str]:
-        topic_ids = set()
+    def crawlMetaTopics(self, ids: Set[str]) -> Set[str]:
+        """
+        Crawls the meta topics and adds them to the graph.
+
+        Parameters
+        ----------
+        `ids` : `Set[str]`
+            The list of meta topic IDs
+
+        Returns
+        -------
+        `Set[str]`
+            The set of topic IDs
+        """
+        topicIds: Set[str] = set()
 
         urls = [consts.JSON_BASE_URL.format(id_) for id_ in ids]
 
         if self.verbose:
             logger.info(f"Getting {len(urls)} JSONs for meta topics...")
 
-        jsons = self.url_dl.get_urls(urls, to_json=True)
+        jsons = self.urlDownloader.getURLs(urls, toJson=True)
 
         if self.verbose:
             logger.success("Done!")
 
-        for raw_json in jsons:
+        for rawJson in jsons:
             # Add meta-topic node
-            raw_json = raw_json[0]
+            rawJson = rawJson[0]
 
-            meta_topic_url = raw_json[consts.KEYS["ID"]]
-            meta_topic_id = self._extract_id_from_url(meta_topic_url)
-            labels = self._extract_labels(raw_json)
+            metaTopicUrl = rawJson[consts.KEYS["ID"]]
+            metaTopicId = self._extractIdFromURL(metaTopicUrl)
+            labels = self._extractLabels(rawJson)
 
-            self.network.add_node(
-                node_id=meta_topic_id,
-                cluster=meta_topic_id,
-                label_en=labels.get("en"),
-                label_ar=labels.get("ar"),
-                label_es=labels.get("es"),
-                label_fr=labels.get("fr"),
-                label_ru=labels.get("ru"),
-                label_zh=labels.get("zh"),
-                node_type="meta_topic",
+            self.network.addNode(
+                nodeId=metaTopicId,
+                cluster=metaTopicId,
+                labelEn=labels.get("en"),
+                labelAr=labels.get("ar"),
+                labelEs=labels.get("es"),
+                labelFr=labels.get("fr"),
+                labelRu=labels.get("ru"),
+                labelZh=labels.get("zh"),
+                nodeType="meta_topic",
             )
 
             self.network.clusters.append(
                 {
-                    "key": meta_topic_id,
+                    "key": metaTopicId,
                     "cluster_label_en": labels.get("en"),
                     "cluster_label_ar": labels.get("ar"),
                     "cluster_label_es": labels.get("es"),
                     "cluster_label_fr": labels.get("fr"),
                     "cluster_label_ru": labels.get("ru"),
                     "cluster_label_zh": labels.get("zh"),
-                    "color": consts.CLUSTERS_COLORS[int(meta_topic_id) - 1],
+                    "color": consts.CLUSTERS_COLORS[int(metaTopicId) - 1],
                 }
             )
 
             # Extract topics from meta-topic
-            _topic_ids = self._extract_topic_ids(raw_json)
+            _topicIds = self._extractTopicIDs(rawJson)
 
             # Update the set of topic ids
-            topic_ids.update(_topic_ids)
+            topicIds.update(_topicIds)
 
             # Add edges between meta-topic and topics
-            for topic_id in _topic_ids:
-                self.network.add_edge(
-                    source=meta_topic_id,
-                    target=topic_id,
-                    edge_type="meta_topic->topic",
+            for topicId in _topicIds:
+                self.network.addEdge(
+                    source=metaTopicId,
+                    target=topicId,
+                    edgeType="meta_topic->topic",
                 )
 
         if self.verbose:
-            logger.success(f"Found {len(topic_ids)} topics.")
+            logger.success(f"Found {len(topicIds)} topics.")
             logger.debug(f"Number of nodes: {len(self.network.G.nodes)}")
             logger.debug(f"Number of edges: {len(self.network.G.edges)}")
 
-        return topic_ids
+        return topicIds
 
-    def crawl_topics(self, ids: List[str]) -> List[str]:
-        subtopic_ids = set()
+    def crawlTopics(self, ids: Set[str]) -> Set[str]:
+        """
+        Crawls the topics and adds them to the graph.
+
+        Parameters
+        ----------
+        `ids` : `List[str]`
+            The list of topic IDs
+
+        Returns
+        -------
+        `Set[str]`
+            The set of subtopic IDs
+        """
+        subtopicIds: Set[str] = set()
 
         urls = [consts.JSON_BASE_URL.format(id_) for id_ in ids]
 
         if self.verbose:
             logger.info(f"Getting {len(urls)} JSONs for topics...")
 
-        jsons = self.url_dl.get_urls(urls, to_json=True)
+        jsons = self.urlDownloader.getURLs(urls, toJson=True)
 
         if self.verbose:
             logger.success("Done!")
 
-        for raw_json in jsons:
+        for rawJson in jsons:
             # Add topic node
-            raw_json = raw_json[0]
+            rawJson = rawJson[0]
 
-            topic_url = raw_json[consts.KEYS["ID"]]
-            topic_id = self._extract_id_from_url(topic_url)
-            labels = self._extract_labels(raw_json)
-            cluster = self._extract_cluster(raw_json)
+            topicUrl = rawJson[consts.KEYS["ID"]]
+            topicId = self._extractIdFromURL(topicUrl)
+            labels = self._extractLabels(rawJson)
+            cluster = self._extractCluster(rawJson)
 
-            self.network.add_node(
-                node_id=topic_id,
+            self.network.addNode(
+                nodeId=topicId,
                 cluster=cluster,
-                label_en=labels.get("en"),
-                label_ar=labels.get("ar"),
-                label_es=labels.get("es"),
-                label_fr=labels.get("fr"),
-                label_ru=labels.get("ru"),
-                label_zh=labels.get("zh"),
-                node_type="topic",
+                labelEn=labels.get("en"),
+                labelAr=labels.get("ar"),
+                labelEs=labels.get("es"),
+                labelFr=labels.get("fr"),
+                labelRu=labels.get("ru"),
+                labelZh=labels.get("zh"),
+                nodeType="topic",
             )
 
             # Extract subtopics from topic
-            _subtopic_ids = self._extract_subtopic_ids(raw_json)
+            _subtopicIds = self._extractSubtopicIDs(rawJson)
 
             # Update the set of subtopic ids
-            subtopic_ids.update(_subtopic_ids)
+            subtopicIds.update(_subtopicIds)
 
             # Add an edge from a topic to its cluster
-            self.network.add_edge(
+            self.network.addEdge(
                 source=cluster,
-                target=topic_id,
+                target=topicId,
             )
 
             # Add edges between topic and subtopics
-            for subtopic_id in _subtopic_ids:
-                self.network.add_edge(
-                    source=topic_id,
-                    target=subtopic_id,
-                    edge_type="topic->subtopic",
+            for subtopicId in _subtopicIds:
+                self.network.addEdge(
+                    source=topicId,
+                    target=subtopicId,
+                    edgeType="topic->subtopic",
                 )
 
         if self.verbose:
-            logger.success(f"Found {len(subtopic_ids)} subtopics.")
+            logger.success(f"Found {len(subtopicIds)} subtopics.")
             logger.debug(f"Number of nodes: {len(self.network.G.nodes)}")
             logger.debug(f"Number of edges: {len(self.network.G.edges)}")
 
-        return subtopic_ids
+        return subtopicIds
 
-    def crawl_subtopics(self, ids: List[str]) -> None:
-        subsubtopic_ids = set()
+    def crawlSubtopics(self, ids: Set[str]) -> Set[str]:
+        """
+        Crawls the subtopics and adds them to the graph.
+
+        Parameters
+        ----------
+        `ids` : `Set[str]`
+            The list of subtopic IDs
+
+        Returns
+        -------
+        `Set[str]`
+            The list of subsubtopic IDs
+        """
+        subSubtopicIds: Set[str] = set()
 
         urls = [consts.JSON_BASE_URL.format(id_) for id_ in ids]
 
         if self.verbose:
             logger.info(f"Getting {len(urls)} JSONs for subtopics...")
 
-        jsons = self.url_dl.get_urls(urls, to_json=True)
+        jsons = self.urlDownloader.getURLs(urls, toJson=True)
 
         if self.verbose:
             logger.success("Done!")
 
-        for raw_json in jsons:
-            if not raw_json:
+        for rawJson in jsons:
+            if not rawJson:
                 logger.warning("Empty JSON")
                 continue
             # Add subtopic node
-            raw_json = raw_json[0]
+            rawJson = rawJson[0]
 
-            subtopic_url = raw_json[consts.KEYS["ID"]]
-            subtopic_id = self._extract_id_from_url(subtopic_url)
-            labels = self._extract_labels(raw_json, is_subtopic=True)
-            cluster = self._extract_cluster(raw_json)
+            subtopicUrl = rawJson[consts.KEYS["ID"]]
+            subtopicId = self._extractIdFromURL(subtopicUrl)
+            labels = self._extractLabels(rawJson, isSubtopic=True)
+            cluster = self._extractCluster(rawJson)
 
-            self.network.add_node(
-                node_id=subtopic_id,
+            self.network.addNode(
+                nodeId=subtopicId,
                 cluster=cluster,
-                label_en=labels.get("en"),
-                label_ar=labels.get("ar"),
-                label_es=labels.get("es"),
-                label_fr=labels.get("fr"),
-                label_ru=labels.get("ru"),
-                label_zh=labels.get("zh"),
-                node_type="subtopic",
+                labelEn=labels.get("en"),
+                labelAr=labels.get("ar"),
+                labelEs=labels.get("es"),
+                labelFr=labels.get("fr"),
+                labelRu=labels.get("ru"),
+                labelZh=labels.get("zh"),
+                nodeType="subtopic",
             )
 
             # Add edges to related topics
-            related_topics = self._extract_related_subtopics(raw_json)
+            relatedTopics = self._extractRelatedSubtopics(rawJson)
 
             # Add an edge from a topic to its cluster
-            self.network.add_edge(
+            self.network.addEdge(
                 source=cluster,
-                target=subtopic_id,
+                target=subtopicId,
             )
 
-            for related_topic in related_topics:
-                if related_topic not in self.subtopic_ids:
+            for relatedTopic in relatedTopics:
+                if relatedTopic not in self.subtopicIds:
                     if self.verbose:
-                        logger.warning(f"Related topic {related_topic} not found!")
+                        logger.warning(f"Related topic {relatedTopic} not found!")
 
-                    subsubtopic_ids.add(related_topic)
+                    subSubtopicIds.add(relatedTopic)
 
-                self.network.add_edge(
-                    source=subtopic_id,
-                    target=related_topic,
-                    edge_type="subtopic->related",
+                self.network.addEdge(
+                    source=subtopicId,
+                    target=relatedTopic,
+                    edgeType="subtopic->related",
                 )
 
             # Extract subtopics from topic
-            _subsubtopic_ids = self._extract_subtopic_ids(raw_json)
+            _subSubtopicIds = self._extractSubtopicIDs(rawJson)
 
             # Update the set of subtopic ids
-            subsubtopic_ids.update(_subsubtopic_ids)
+            subSubtopicIds.update(_subSubtopicIds)
 
         if self.verbose:
             logger.success(
-                f"Found {len(subsubtopic_ids)} subsubtopics/related subtopics."
+                f"Found {len(subSubtopicIds)} subsubtopics/related subtopics."
             )
             logger.debug(f"Number of nodes: {len(self.network.G.nodes)}")
             logger.debug(f"Number of edges: {len(self.network.G.edges)}")
 
-        return subsubtopic_ids
+        return subSubtopicIds
 
-    def export_to_json(self, file_path: str) -> None:
+    def exportToJson(self, filePath: str) -> None:
         """
         Exports the network to a JSON file, which can be used to create a
         Sigma.js network. It has the form:
@@ -302,39 +348,40 @@ class UNBISThesaurusScraper:
         ```json
         {
             "nodes": [...],
-            "edges": [...]
+            "edges": [...],
+            "clusters": [...]
         }
         ```
 
         Parameters
         ----------
-        `file_path` : `str`
+        `filePath` : `str`
             The path to write the JSON file to
         """
         import json
         import os
 
         # Create the directory upstream if they don't exist
-        dirname = os.path.dirname(file_path)
+        dirname = os.path.dirname(filePath)
         if dirname:
             os.makedirs(dirname, exist_ok=True)
 
-        with open(file_path, "w") as f:
-            json.dump(self.network.to_json(), f, indent=4, ensure_ascii=False)
+        with open(filePath, "w") as f:
+            json.dump(self.network.toJson(), f, indent=4, ensure_ascii=False)
 
         logger.debug(f"Total nodes: {len(self.network.G.nodes)}")
         logger.debug(f"Total edges: {len(self.network.G.edges)}")
-        logger.success(f"Saved network JSON to {file_path}!")
+        logger.success(f"Saved network JSON to {filePath}!")
 
-    def _extract_labels(
+    def _extractLabels(
         self,
-        json_: Dict[str, Any],
-        is_subtopic: bool = False,
+        json_: JSON,
+        isSubtopic: bool = False,
     ) -> Dict[str, str]:
         """
         Extracts the labels from their JSON object. It is of the form:
 
-        ```
+        ```json
         [
             {
                 "@language": "en",
@@ -346,16 +393,20 @@ class UNBISThesaurusScraper:
 
         Parameters
         ----------
-        `json_` : `Dict[str, Any]`
+        `json_` : `JSON`
             JSON object containing the labels
+        `isSubtopic` : `bool`, optional
+            Flag to indicate a subtopic context. The function will use different keys
+            depending on its value. By default `False`
 
         Returns
         -------
         `Dict[str, str]`
             Correctly formatted JSON object containing the labels
         """
-        labels = {}
-        key = consts.KEYS["SUBTOPIC_LABELS"] if is_subtopic else consts.KEYS["LABELS"]
+
+        labels: Dict[str, str] = {}
+        key = consts.KEYS["SUBTOPIC_LABELS"] if isSubtopic else consts.KEYS["LABELS"]
 
         for obj in json_[key]:
             lang = obj[consts.KEYS["LANG"]]
@@ -364,7 +415,7 @@ class UNBISThesaurusScraper:
 
         return labels
 
-    def _extract_id_from_url(self, url: str) -> str:
+    def _extractIdFromURL(self, url: str) -> str:
         """
         A URL is of the form:
 
@@ -372,21 +423,21 @@ class UNBISThesaurusScraper:
         http://metadata.un.org/thesaurus/{id}
         ```
 
-        This function extracts the id from the URL.
+        This function extracts the ID from the URL.
 
         Parameters
         ----------
         `url` : `str`
-            The URL to extract the id from
+            The URL to extract the ID from
 
         Returns
         -------
         `str`
-            The extracted id
+            The extracted ID
         """
         return url.split("/")[-1]
 
-    def _extract_topic_ids(self, json_: Dict[str, Any]) -> Set[str]:
+    def _extractTopicIDs(self, json_: JSON) -> Set[str]:
         """
         Extracts the topic ids from the `hasTopConcept` key for meta-topics.
         It is of the form:
@@ -407,7 +458,7 @@ class UNBISThesaurusScraper:
 
         Parameters
         ----------
-        `json_` : `Dict[str, Any]`
+        `json_` : `JSON`
             The JSON object containing the topic ids
 
         Returns
@@ -415,11 +466,11 @@ class UNBISThesaurusScraper:
         `Set[str]`
             The list of parsed topic ids
         """
-        return self._extract_topics(json_, consts.KEYS["TOPICS"])
+        return self._extractTopics(json_, consts.KEYS["TOPICS"])
 
-    def _extract_subtopic_ids(self, json_: Dict[str, Any]) -> Set[str]:
+    def _extractSubtopicIDs(self, json_: JSON) -> Set[str]:
         """
-        Extracts the subtopic ids from the `narrower` key for topics.
+        Extracts the subtopic ids from the `"narrower"` key for topics.
         It is of the form:
 
         ```json
@@ -438,19 +489,19 @@ class UNBISThesaurusScraper:
 
         Parameters
         ----------
-        `json_` : `Dict[str, Any]`
-            The JSON object containing the subtopic ids
+        `json_` : `JSON`
+            The JSON object containing the subtopic IDs
 
         Returns
         -------
         `Set[str]`
-            The list of parsed subtopic ids
+            The list of parsed subtopic IDs
         """
-        return self._extract_topics(json_, consts.KEYS["SUBTOPICS"])
+        return self._extractTopics(json_, consts.KEYS["SUBTOPICS"])
 
-    def _extract_related_subtopics(self, json_: Dict[str, Any]) -> Set[str]:
+    def _extractRelatedSubtopics(self, json_: JSON) -> Set[str]:
         """
-        Extracts the related subtopic ids from the `related` key for subtopics.
+        Extracts the related subtopic IDs from the `related` key for subtopics.
         It is of the form:
 
         ```json
@@ -469,23 +520,23 @@ class UNBISThesaurusScraper:
 
         Parameters
         ----------
-        `json_` : `Dict[str, Any]`
-            The JSON object containing the related subtopic ids
+        `json_` : `JSON`
+            The JSON object containing the related subtopic IDs
 
         Returns
         -------
         `Set[str]`
-            The list of parsed related subtopic ids
+            The list of parsed related subtopic IDs
         """
-        return self._extract_topics(json_, consts.KEYS["RELATED"])
+        return self._extractTopics(json_, consts.KEYS["RELATED"])
 
-    def _extract_topics(self, json_: Dict[str, Any], key: str) -> Set[str]:
+    def _extractTopics(self, json_: JSON, key: str) -> Set[str]:
         """
         Generic function to extract topics for all types of nodes.
 
         Parameters
         ----------
-        `json_` : `Dict[str, Any]`
+        `json_` : `JSON`
             The JSON object containing the topics
         `key` : `str`
             The key to extract the topics from (e.g. `hasTopConcept`)
@@ -495,18 +546,32 @@ class UNBISThesaurusScraper:
         `Set[str]`
             The list of parsed topics
         """
-        topics = set()
+        topics: Set[str] = set()
+
         if key not in json_:
             return topics
 
         for obj in json_[key]:
             url = obj[consts.KEYS["ID"]]
-            id_ = self._extract_id_from_url(url)
+            id_ = self._extractIdFromURL(url)
             topics.add(id_)
 
         return topics
 
-    def _extract_cluster(self, json_: Dict[str, Any]) -> Union[int, None]:
+    def _extractCluster(self, json_: JSON) -> int:
+        """
+        Extracts the cluster ID from the `consts.KEYS["CLUSTER"]` key for topics and subtopics.
+
+        Parameters
+        ----------
+        `json_` : `JSON`
+            The JSON object containing the cluster ID
+
+        Returns
+        -------
+        `int`
+            The cluster ID if found, `consts.UNKNOWN_CLUSTER` otherwise
+        """
         if consts.KEYS["CLUSTER"] not in json_:
             if self.verbose:
                 logger.error(
@@ -515,4 +580,4 @@ class UNBISThesaurusScraper:
             return consts.UNKNOWN_CLUSTER
         else:
             clusters = json_[consts.KEYS["CLUSTER"]]
-            return self._extract_id_from_url(clusters[0][consts.KEYS["ID"]])
+            return self._extractIdFromURL(clusters[0][consts.KEYS["ID"]])
