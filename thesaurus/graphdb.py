@@ -109,7 +109,7 @@ class GraphDB:
     def createOrUpdateNodeIfExists(
         self,
         nodeId: str,
-        cluster: Optional[int] = None,
+        cluster: Optional[str] = None,
         labelEn: Optional[str] = None,
         labelAr: Optional[str] = None,
         labelEs: Optional[str] = None,
@@ -145,7 +145,7 @@ class GraphDB:
         ----------
         `nodeId` : `str`
             Unique ID of the node, same as in UNBIS Thesaurus
-        `cluster` : `int`
+        `cluster` : `Optional[str]`, optional
             Cluster ID of the node
         `labelEn` : `Optional[str]`, optional
             Label in English, by default `None`

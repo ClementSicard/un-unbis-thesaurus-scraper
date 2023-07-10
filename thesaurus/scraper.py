@@ -1,7 +1,10 @@
-from typing import Dict, Set
+import json
+import sys
+from typing import Dict, Optional, Set
 
 from bs4 import BeautifulSoup
 from loguru import logger
+from tqdm import tqdm
 
 import thesaurus.consts as consts
 import thesaurus.utils as utils
@@ -16,16 +19,13 @@ class UNBISThesaurusScraper:
     class to create the graph.
     """
 
-    def __init__(
-        self,
-        verbose: bool,
-    ) -> None:
+    def __init__(self, verbose: bool, boltURL: Optional[str] = None) -> None:
         self.verbose = verbose
         self.urlDownloader = utils.FastURLDownloader(verbose=self.verbose)
         self.BASE_URL = "https://metadata.un.org/thesaurus/categories?lang=en"
 
         # Save all the ids to avoid duplicates
-        self.network = Network(verbose=self.verbose)
+        self.network = Network(verbose=self.verbose, boltURL=boltURL)
         self.metaTopicsIds: Set[str] = set()
         self.topicIds: Set[str] = set()
         self.subtopicIds: Set[str] = set()
@@ -42,32 +42,46 @@ class UNBISThesaurusScraper:
         `JSON`
             The graph JSON
         """
-        logger.info("Started crawling the UNBIS Thesaurus...")
-        self.metaTopicsIds = self.getMetaTopicsIds()
-        self.topicIds = self.crawlMetaTopics(ids=self.metaTopicsIds)
-        self.subtopicIds = self.crawlTopics(ids=self.topicIds)
+        try:
+            logger.info("Started crawling the UNBIS Thesaurus...")
+            self.metaTopicsIds = self.getMetaTopicsIds()
+            self.topicIds = self.crawlMetaTopics(ids=self.metaTopicsIds)
+            self.subtopicIds = self.crawlTopics(ids=self.topicIds)
 
-        logger.info("Recusrively crawling subsubtopics...")
-        i = 1
-        unexplored = self.subtopicIds
-        while True:
-            unexplored = self.crawlSubtopics(ids=unexplored)
-            self.subtopicIds.update(unexplored)
+            logger.info("Recusrively crawling subsubtopics...")
+            i = 1
+            unexplored = self.subtopicIds
+            while True:
+                unexplored = self.crawlSubtopics(ids=unexplored)
+                self.subtopicIds.update(unexplored)
 
-            logger.debug(f"Unexplored: {len(unexplored)} at iteration {i}")
-            if len(unexplored) == 0:
-                break
-            i += 1
+                logger.debug(f"Unexplored: {len(unexplored)} at iteration {i}")
+                if len(unexplored) == 0:
+                    break
+                i += 1
 
-        if self.verbose:
-            logger.debug(f"Meta topics: {self.metaTopicsIds}")
-            logger.debug(f"Meta topics: {len(self.metaTopicsIds)}")
-            logger.debug(f"Topics: {len(self.topicIds)}")
-            logger.debug(f"Subtopics: {len(self.subtopicIds)}")
-            logger.debug(f"Number of nodes: {len(self.network.G.nodes)}")
-            logger.debug(f"Number of edges: {len(self.network.G.edges)}")
+            if self.verbose:
+                logger.debug(f"Meta topics: {self.metaTopicsIds}")
+                logger.debug(f"Meta topics: {len(self.metaTopicsIds)}")
+                logger.debug(f"Topics: {len(self.topicIds)}")
+                logger.debug(f"Subtopics: {len(self.subtopicIds)}")
+                logger.debug(f"Number of nodes: {len(self.network.G.nodes)}")
+                logger.debug(f"Number of edges: {len(self.network.G.edges)}")
 
-        return self.network.toJson()
+            return self.network.toJson()
+        except Exception as e:
+            logger.error(e)
+            # Delete everything in the DB if it exists
+            if self.network.useNeo4j:
+                self.network.graphDB.askToDeleteEverything()
+            exit(1)
+        except KeyboardInterrupt:
+            logger.error("Keyboard interrupt. Stopping now.")
+
+            # Delete everything in the DB if it exists
+            if self.network.useNeo4j:
+                self.network.graphDB.askToDeleteEverything()
+            exit(0)
 
     def getMetaTopicsIds(self) -> Set[str]:
         """
@@ -125,7 +139,14 @@ class UNBISThesaurusScraper:
         if self.verbose:
             logger.success("Done!")
 
-        for rawJson in jsons:
+        for rawJson in tqdm(
+            jsons,
+            desc="Crawling meta-topics",
+            disable=not self.verbose,
+            unit="metatopic",
+            total=len(jsons),
+            file=sys.stderr,
+        ):
             # Add meta-topic node
             rawJson = rawJson[0]
 
@@ -142,7 +163,7 @@ class UNBISThesaurusScraper:
                 labelFr=labels.get("fr"),
                 labelRu=labels.get("ru"),
                 labelZh=labels.get("zh"),
-                nodeType="meta_topic",
+                nodeType="MetaTopic",
             )
 
             self.network.clusters.append(
@@ -169,7 +190,6 @@ class UNBISThesaurusScraper:
                 self.network.addEdge(
                     source=metaTopicId,
                     target=topicId,
-                    edgeType="meta_topic->topic",
                 )
 
         if self.verbose:
@@ -205,7 +225,14 @@ class UNBISThesaurusScraper:
         if self.verbose:
             logger.success("Done!")
 
-        for rawJson in jsons:
+        for rawJson in tqdm(
+            jsons,
+            desc="Crawling topics",
+            disable=not self.verbose,
+            unit="topic",
+            total=len(jsons),
+            file=sys.stderr,
+        ):
             # Add topic node
             rawJson = rawJson[0]
 
@@ -223,7 +250,7 @@ class UNBISThesaurusScraper:
                 labelFr=labels.get("fr"),
                 labelRu=labels.get("ru"),
                 labelZh=labels.get("zh"),
-                nodeType="topic",
+                nodeType="Topic",
             )
 
             # Extract subtopics from topic
@@ -239,11 +266,14 @@ class UNBISThesaurusScraper:
             )
 
             # Add edges between topic and subtopics
+            if not _subtopicIds:
+                logger.error(f"No subtopics found for topic {topicId}")
+                logger.warning(f"JSON: {json.dumps(rawJson, indent=4)}")
+
             for subtopicId in _subtopicIds:
                 self.network.addEdge(
                     source=topicId,
                     target=subtopicId,
-                    edgeType="topic->subtopic",
                 )
 
         if self.verbose:
@@ -279,7 +309,14 @@ class UNBISThesaurusScraper:
         if self.verbose:
             logger.success("Done!")
 
-        for rawJson in jsons:
+        for rawJson in tqdm(
+            jsons,
+            desc="Crawling subtopics",
+            disable=not self.verbose,
+            unit="subtopic",
+            total=len(jsons),
+            file=sys.stderr,
+        ):
             if not rawJson:
                 logger.warning("Empty JSON")
                 continue
@@ -300,7 +337,7 @@ class UNBISThesaurusScraper:
                 labelFr=labels.get("fr"),
                 labelRu=labels.get("ru"),
                 labelZh=labels.get("zh"),
-                nodeType="subtopic",
+                nodeType="Topic",
             )
 
             # Add edges to related topics
@@ -322,7 +359,7 @@ class UNBISThesaurusScraper:
                 self.network.addEdge(
                     source=subtopicId,
                     target=relatedTopic,
-                    edgeType="subtopic->related",
+                    isRelatedTo=True,
                 )
 
             # Extract subtopics from topic
@@ -408,7 +445,7 @@ class UNBISThesaurusScraper:
         labels: Dict[str, str] = {}
         key = consts.KEYS["SUBTOPIC_LABELS"] if isSubtopic else consts.KEYS["LABELS"]
 
-        for obj in json_[key]:
+        for obj in json_[key]:  # type: ignore
             lang = obj[consts.KEYS["LANG"]]
             label = obj[consts.KEYS["VALUE"]]
             labels[lang] = label
@@ -466,7 +503,7 @@ class UNBISThesaurusScraper:
         `Set[str]`
             The list of parsed topic ids
         """
-        return self._extractTopics(json_, consts.KEYS["TOPICS"])
+        return self._extractTopics(json_, consts.KEYS["TOPICS"], verbose=True)
 
     def _extractSubtopicIDs(self, json_: JSON) -> Set[str]:
         """
@@ -497,7 +534,7 @@ class UNBISThesaurusScraper:
         `Set[str]`
             The list of parsed subtopic IDs
         """
-        return self._extractTopics(json_, consts.KEYS["SUBTOPICS"])
+        return self._extractTopics(json_, consts.KEYS["SUBTOPICS"], verbose=True)
 
     def _extractRelatedSubtopics(self, json_: JSON) -> Set[str]:
         """
@@ -528,9 +565,14 @@ class UNBISThesaurusScraper:
         `Set[str]`
             The list of parsed related subtopic IDs
         """
-        return self._extractTopics(json_, consts.KEYS["RELATED"])
+        return self._extractTopics(json_, consts.KEYS["RELATED"], verbose=True)
 
-    def _extractTopics(self, json_: JSON, key: str) -> Set[str]:
+    def _extractTopics(
+        self,
+        json_: JSON,
+        key: str,
+        verbose: bool = False,
+    ) -> Set[str]:
         """
         Generic function to extract topics for all types of nodes.
 
@@ -540,6 +582,8 @@ class UNBISThesaurusScraper:
             The JSON object containing the topics
         `key` : `str`
             The key to extract the topics from (e.g. `hasTopConcept`)
+        `verbose` : `bool`, optional
+            Controls the verbose of the output, by default `False`
 
         Returns
         -------
@@ -558,7 +602,7 @@ class UNBISThesaurusScraper:
 
         return topics
 
-    def _extractCluster(self, json_: JSON) -> int:
+    def _extractCluster(self, json_: JSON) -> str:
         """
         Extracts the cluster ID from the `consts.KEYS["CLUSTER"]` key for topics and subtopics.
 
@@ -569,7 +613,7 @@ class UNBISThesaurusScraper:
 
         Returns
         -------
-        `int`
+        `str`
             The cluster ID if found, `consts.UNKNOWN_CLUSTER` otherwise
         """
         if consts.KEYS["CLUSTER"] not in json_:

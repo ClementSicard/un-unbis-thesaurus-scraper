@@ -36,14 +36,14 @@ class Network:
                 raise ConnectionError("Could not connect to Neo4j database")
 
         self.G = nx.Graph(name="UNBIS Thesaurus")
-        self.clusters: List[str] = []
+        self.clusters: List[Dict[str, Optional[Any]]] = []
 
         self.verbose = verbose
 
     def addNode(
         self,
         nodeId: str,
-        cluster: int,
+        cluster: str,
         labelEn: Optional[str] = None,
         labelAr: Optional[str] = None,
         labelEs: Optional[str] = None,
@@ -60,7 +60,7 @@ class Network:
         ----------
         `nodeId` : `str`
             Unique ID of the node, same as in UNBIS Thesaurus
-        `cluster` : `int`
+        `cluster` : `str`
             Cluster ID of the node
         `labelEn` : `Optional[str]`, optional
             Label in English, by default `None`

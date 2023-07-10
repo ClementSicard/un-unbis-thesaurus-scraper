@@ -30,7 +30,7 @@ COLORS = {
     "subtopic->related": "black",
 }
 
-UNKNOWN_CLUSTER = None
+UNKNOWN_CLUSTER = "-1"
 
 SIZES = {
     "meta_topic": 25.0,
