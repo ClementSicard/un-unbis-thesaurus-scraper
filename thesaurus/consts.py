@@ -41,7 +41,7 @@ SIZES = {
 BASE_URL = "https://metadata.un.org/thesaurus/{}"
 JSON_BASE_URL = BASE_URL + ".json"
 
-NODE_TYPES = ["meta_topic", "topic", "subtopic"]
+NODE_TYPES = ["MetaTopic", "Topic"]
 EDGE_TYPES = ["meta_topic->topic", "topic->subtopic", "subtopic->related"]
 
 CLUSTERS_COLORS = [
@@ -64,3 +64,15 @@ CLUSTERS_COLORS = [
     "#673ab7",
     "#795548",
 ]
+
+
+class GraphDBConsts:
+    """
+    GraphDBConsts is a class that contains constants for the GraphDB handler.
+    """
+
+    # GraphDB URI, from Docker compose environment
+    URI = "bolt://neo4j:7687"
+    USER = None
+    PASSWORD = None
+    AUTH = (USER, PASSWORD)
