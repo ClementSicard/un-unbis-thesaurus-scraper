@@ -6,6 +6,7 @@ from loguru import logger
 from tqdm import tqdm
 
 import thesaurus.consts as consts
+from thesaurus.graphdb import GraphDB
 
 
 class Network:
@@ -13,7 +14,27 @@ class Network:
     Network class that represents the graph of the UNBIS Thesaurus.
     """
 
-    def __init__(self, verbose: bool = False) -> None:
+    boltURL: Optional[str]
+    graphDB: GraphDB
+    G: nx.Graph
+    clusters: List[str]
+    verbose: bool
+    useNeo4j: bool = False
+
+    def __init__(self, boltURL: Optional[str] = None, verbose: bool = False) -> None:
+        self.boltURL = boltURL
+
+        if self.boltURL is not None:
+            logger.info("Initializing Neo4j connector...")
+            self.graphDB = GraphDB(self.boltURL, verbose=verbose)
+            try:
+                self.graphDB.checkConnection()
+                self.useNeo4j = True
+                logger.success("Done!")
+            except ConnectionError:
+                logger.error("Could not connect to Neo4j database")
+                raise ConnectionError("Could not connect to Neo4j database")
+
         self.G = nx.Graph(name="UNBIS Thesaurus")
         self.clusters: List[str] = []
 
@@ -78,14 +99,29 @@ class Network:
 
         self.G.add_node(nodeId, **node_json)
 
+        if self.useNeo4j:
+            self.graphDB.createOrUpdateNodeIfExists(
+                nodeId=nodeId,
+                cluster=cluster,
+                labelEn=labelEn,
+                labelAr=labelAr,
+                labelEs=labelEs,
+                labelFr=labelFr,
+                labelRu=labelRu,
+                labelZh=labelZh,
+                nodeType=nodeType,
+            )
+
     def addEdge(
         self,
         source: str,
         target: str,
-        edgeType: str = "topic->subtopic",
+        isRelatedTo: bool = False,
     ) -> None:
         """
-        Adds an edge to the graph. Edge type is defined in `consts.py` and is based on the edge type.
+        Adds an edge to the graph. If the edge already exists, it does nothing.
+
+        If a Neo4j connector is used, it also adds the edge to the graph database.
 
         Parameters
         ----------
@@ -93,14 +129,20 @@ class Network:
             Source node id
         `target` : `str`
             Target node id
-        `edgeType` : `str`, optional
-            Edge type, by default `"topic->subtopic"`
+        `isRelatedTo` : `bool`, optional
+            Whether the edge is a "related to" edge, by default `False`
         """
-        assert edgeType in consts.EDGE_TYPES, f"Invalid edge type {edgeType}"
 
         edge_id = (source, target)
 
-        self.G.add_edge(*edge_id, edge_type=edgeType)
+        self.G.add_edge(*edge_id)
+
+        if self.useNeo4j:
+            self.graphDB.createEdge(
+                source=source,
+                target=target,
+                isRelatedTo=isRelatedTo,
+            )
 
     def toJson(self) -> Dict[str, Any]:
         """
