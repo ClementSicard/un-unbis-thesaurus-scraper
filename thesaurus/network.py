@@ -50,6 +50,12 @@ class Network:
         labelFr: Optional[str] = None,
         labelRu: Optional[str] = None,
         labelZh: Optional[str] = None,
+        altLabelsEn: Optional[List[str]] = None,
+        altLabelsAr: Optional[List[str]] = None,
+        altLabelsEs: Optional[List[str]] = None,
+        altLabelsFr: Optional[List[str]] = None,
+        altLabelsRu: Optional[List[str]] = None,
+        altLabelsZh: Optional[List[str]] = None,
         nodeType: str = "topic",
     ) -> None:
         """
@@ -95,6 +101,12 @@ class Network:
             "label_fr": labelFr,
             "label_ru": labelRu,
             "label_zh": labelZh,
+            "alt_labels_en": altLabelsEn if altLabelsEn else [],
+            "alt_labels_ar": altLabelsAr if altLabelsAr else [],
+            "alt_labels_es": altLabelsEs if altLabelsEs else [],
+            "alt_labels_fr": altLabelsFr if altLabelsFr else [],
+            "alt_labels_ru": altLabelsRu if altLabelsRu else [],
+            "alt_labels_zh": altLabelsZh if altLabelsZh else [],
         }
 
         self.G.add_node(nodeId, **node_json)

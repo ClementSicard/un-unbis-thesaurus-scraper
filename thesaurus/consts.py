@@ -13,6 +13,7 @@ KEYS = {
     "LANG": "@language",
     "VALUE": "@value",
     "LABELS": "http://purl.org/dc/terms/title",
+    "USED_FOR": "http://www.w3.org/2004/02/skos/core#altLabel",
     "SUBTOPIC_LABELS": "http://www.w3.org/2004/02/skos/core#prefLabel",
     "TOPICS": "http://www.w3.org/2004/02/skos/core#hasTopConcept",
     "SUBTOPICS": "http://www.w3.org/2004/02/skos/core#narrower",

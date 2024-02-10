@@ -1,6 +1,6 @@
 import json
 import sys
-from typing import Dict, Optional, Set
+from typing import Dict, List, Optional, Set
 
 from bs4 import BeautifulSoup
 from loguru import logger
@@ -62,11 +62,11 @@ class UNBISThesaurusScraper:
 
             if self.verbose:
                 logger.debug(f"Meta topics: {self.metaTopicsIds}")
-                logger.debug(f"Meta topics: {len(self.metaTopicsIds)}")
-                logger.debug(f"Topics: {len(self.topicIds)}")
-                logger.debug(f"Subtopics: {len(self.subtopicIds)}")
-                logger.debug(f"Number of nodes: {len(self.network.G.nodes)}")
-                logger.debug(f"Number of edges: {len(self.network.G.edges)}")
+                logger.debug(f"Meta topics: {len(self.metaTopicsIds):,}")
+                logger.debug(f"Topics: {len(self.topicIds):,}")
+                logger.debug(f"Subtopics: {len(self.subtopicIds):,}")
+                logger.debug(f"Number of nodes: {len(self.network.G.nodes):,}")
+                logger.debug(f"Number of edges: {len(self.network.G.edges):,}")
 
             return self.network.toJson()
         except Exception as e:
@@ -107,9 +107,9 @@ class UNBISThesaurusScraper:
             metaTopicsIds.add(metaTopicId)
 
         if self.verbose:
-            logger.success(f"Found {len(metaTopicsIds)} meta topics.")
-            logger.debug(f"Number of nodes: {len(self.network.G.nodes)}")
-            logger.debug(f"Number of edges: {len(self.network.G.edges)}")
+            logger.success(f"Found {len(metaTopicsIds):,} meta topics.")
+            logger.debug(f"Number of nodes: {len(self.network.G.nodes):,}")
+            logger.debug(f"Number of edges: {len(self.network.G.edges):,}")
 
         return metaTopicsIds
 
@@ -132,7 +132,7 @@ class UNBISThesaurusScraper:
         urls = [consts.JSON_BASE_URL.format(id_) for id_ in ids]
 
         if self.verbose:
-            logger.info(f"Getting {len(urls)} JSONs for meta topics...")
+            logger.info(f"Getting {len(urls):,} JSONs for meta topics...")
 
         jsons = self.urlDownloader.getURLs(urls, toJson=True)
 
@@ -153,6 +153,7 @@ class UNBISThesaurusScraper:
             metaTopicUrl = rawJson[consts.KEYS["ID"]]
             metaTopicId = self._extractIdFromURL(metaTopicUrl)
             labels = self._extractLabels(rawJson)
+            usedForLabels = self._extractAltLabels(rawJson)
 
             self.network.addNode(
                 nodeId=metaTopicId,
@@ -163,6 +164,12 @@ class UNBISThesaurusScraper:
                 labelFr=labels.get("fr"),
                 labelRu=labels.get("ru"),
                 labelZh=labels.get("zh"),
+                altLabelsEn=usedForLabels.get("en"),
+                altLabelsAr=usedForLabels.get("ar"),
+                altLabelsEs=usedForLabels.get("es"),
+                altLabelsFr=usedForLabels.get("fr"),
+                altLabelsRu=usedForLabels.get("ru"),
+                altLabelsZh=usedForLabels.get("zh"),
                 nodeType="MetaTopic",
             )
 
@@ -193,9 +200,9 @@ class UNBISThesaurusScraper:
                 )
 
         if self.verbose:
-            logger.success(f"Found {len(topicIds)} topics.")
-            logger.debug(f"Number of nodes: {len(self.network.G.nodes)}")
-            logger.debug(f"Number of edges: {len(self.network.G.edges)}")
+            logger.success(f"Found {len(topicIds):,} topics.")
+            logger.debug(f"Number of nodes: {len(self.network.G.nodes):,}")
+            logger.debug(f"Number of edges: {len(self.network.G.edges):,}")
 
         return topicIds
 
@@ -218,7 +225,7 @@ class UNBISThesaurusScraper:
         urls = [consts.JSON_BASE_URL.format(id_) for id_ in ids]
 
         if self.verbose:
-            logger.info(f"Getting {len(urls)} JSONs for topics...")
+            logger.info(f"Getting {len(urls):,} JSONs for topics...")
 
         jsons = self.urlDownloader.getURLs(urls, toJson=True)
 
@@ -239,6 +246,7 @@ class UNBISThesaurusScraper:
             topicUrl = rawJson[consts.KEYS["ID"]]
             topicId = self._extractIdFromURL(topicUrl)
             labels = self._extractLabels(rawJson)
+            usedForLabels = self._extractAltLabels(rawJson)
             cluster = self._extractCluster(rawJson)
 
             self.network.addNode(
@@ -250,6 +258,12 @@ class UNBISThesaurusScraper:
                 labelFr=labels.get("fr"),
                 labelRu=labels.get("ru"),
                 labelZh=labels.get("zh"),
+                altLabelsEn=usedForLabels.get("en"),
+                altLabelsAr=usedForLabels.get("ar"),
+                altLabelsEs=usedForLabels.get("es"),
+                altLabelsFr=usedForLabels.get("fr"),
+                altLabelsRu=usedForLabels.get("ru"),
+                altLabelsZh=usedForLabels.get("zh"),
                 nodeType="Topic",
             )
 
@@ -277,9 +291,9 @@ class UNBISThesaurusScraper:
                 )
 
         if self.verbose:
-            logger.success(f"Found {len(subtopicIds)} subtopics.")
-            logger.debug(f"Number of nodes: {len(self.network.G.nodes)}")
-            logger.debug(f"Number of edges: {len(self.network.G.edges)}")
+            logger.success(f"Found {len(subtopicIds):,} subtopics.")
+            logger.debug(f"Number of nodes: {len(self.network.G.nodes):,}")
+            logger.debug(f"Number of edges: {len(self.network.G.edges):,}")
 
         return subtopicIds
 
@@ -302,7 +316,7 @@ class UNBISThesaurusScraper:
         urls = [consts.JSON_BASE_URL.format(id_) for id_ in ids]
 
         if self.verbose:
-            logger.info(f"Getting {len(urls)} JSONs for subtopics...")
+            logger.info(f"Getting {len(urls):,} JSONs for subtopics...")
 
         jsons = self.urlDownloader.getURLs(urls, toJson=True)
 
@@ -326,6 +340,7 @@ class UNBISThesaurusScraper:
             subtopicUrl = rawJson[consts.KEYS["ID"]]
             subtopicId = self._extractIdFromURL(subtopicUrl)
             labels = self._extractLabels(rawJson, isSubtopic=True)
+            usedForLabels = self._extractAltLabels(rawJson)
             cluster = self._extractCluster(rawJson)
 
             self.network.addNode(
@@ -337,6 +352,12 @@ class UNBISThesaurusScraper:
                 labelFr=labels.get("fr"),
                 labelRu=labels.get("ru"),
                 labelZh=labels.get("zh"),
+                altLabelsEn=usedForLabels.get("en"),
+                altLabelsAr=usedForLabels.get("ar"),
+                altLabelsEs=usedForLabels.get("es"),
+                altLabelsFr=usedForLabels.get("fr"),
+                altLabelsRu=usedForLabels.get("ru"),
+                altLabelsZh=usedForLabels.get("zh"),
                 nodeType="Topic",
             )
 
@@ -369,11 +390,9 @@ class UNBISThesaurusScraper:
             subSubtopicIds.update(_subSubtopicIds)
 
         if self.verbose:
-            logger.success(
-                f"Found {len(subSubtopicIds)} subsubtopics/related subtopics."
-            )
-            logger.debug(f"Number of nodes: {len(self.network.G.nodes)}")
-            logger.debug(f"Number of edges: {len(self.network.G.edges)}")
+            logger.success(f"Found {len(subSubtopicIds):,} subsubtopics/related subtopics.")
+            logger.debug(f"Number of nodes: {len(self.network.G.nodes):,}")
+            logger.debug(f"Number of edges: {len(self.network.G.edges):,}")
 
         return subSubtopicIds
 
@@ -451,6 +470,51 @@ class UNBISThesaurusScraper:
             labels[lang] = label
 
         return labels
+
+    def _extractAltLabels(
+        self,
+        json_: JSON,
+    ) -> Dict[str, List[str]]:
+        """
+        Extracts the "used for" labels from their JSON object. It is of the form:
+
+        ```json
+        [
+            {
+                "@language": "en",
+                "@value": "Agriculture"
+            },
+            ...
+        ]
+        ```
+
+        Parameters
+        ----------
+        `json_` : `JSON`
+            JSON object containing the used for labels
+        `isSubtopic` : `bool`, optional
+            Flag to indicate a subtopic context. The function will use different keys
+            depending on its value. By default `False`
+
+        Returns
+        -------
+        `Dict[str, List[str]]`
+            Correctly formatted JSON object containing the labels
+        """
+
+        usedForLabels: Dict[str, str] = {}
+        key = consts.KEYS["USED_FOR"]
+
+        if key in json_:
+            for obj in json_[key]:  # type: ignore
+                lang = obj[consts.KEYS["LANG"]]
+                label = obj[consts.KEYS["VALUE"]]
+                if lang not in usedForLabels:
+                    usedForLabels[lang] = []
+                usedForLabels[lang].append(label)
+        if usedForLabels:
+            logger.info(f"Used for labels: {usedForLabels}")
+        return usedForLabels
 
     def _extractIdFromURL(self, url: str) -> str:
         """
@@ -618,9 +682,7 @@ class UNBISThesaurusScraper:
         """
         if consts.KEYS["CLUSTER"] not in json_:
             if self.verbose:
-                logger.error(
-                    f"Key {consts.KEYS['CLUSTER']} not found in JSON object in {json_[consts.KEYS['ID']]}"
-                )
+                logger.error(f"Key {consts.KEYS['CLUSTER']} not found in JSON object in {json_[consts.KEYS['ID']]}")
             return consts.UNKNOWN_CLUSTER
         else:
             clusters = json_[consts.KEYS["CLUSTER"]]

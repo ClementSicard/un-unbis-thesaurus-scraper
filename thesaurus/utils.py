@@ -95,9 +95,7 @@ class FastURLDownloader:
             )
 
         if self.verbose:
-            logger.success(
-                f"Finalized all. Return is a list of len {len(ret)} outputs."
-            )
+            logger.success(f"Finalized all. Return is a list of len {len(ret)} outputs.")
 
         return ret
 
@@ -135,9 +133,7 @@ class FastURLDownloader:
         end = time.time()
 
         if self.verbose:
-            logger.success(
-                f"Took {end-start:.2f} seconds to download {len(urls)} urls!"
-            )
+            logger.success(f"Took {end-start:.2f} seconds to fetch {len(urls)} urls!")
 
         return results
 
